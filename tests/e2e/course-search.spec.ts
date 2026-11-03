@@ -93,21 +93,28 @@ test.describe('Course search @e2e', () => {
    * `test.fail()` so the suite stays green while the bug is open, and will
    * turn RED (unexpected pass) the day it is fixed, prompting removal of
    * the annotation.
+   *
+   * `test.fail()` is called only AFTER the preconditions pass, so a network
+   * error or a broken page is reported as a real failure instead of being
+   * mistaken for the known bug.
    */
   test.describe('known defects', () => {
     test('BUG-01 searching a teacher name returns their courses', async ({ page }) => {
-      test.fail(true, 'BUG-01: placeholder says "teachers" are searchable, but tutor names return nothing');
       const results = new SearchResultsPage(page);
       await results.gotoCatalogue();
-      await results.search(SEARCH.teacherName);
+      await results.search(SEARCH.teacherName); // precondition: results page loaded
+
+      test.fail(true, 'BUG-01: placeholder says "teachers" are searchable, but tutor names return nothing');
       await expect(results.cards.first()).toBeVisible({ timeout: 5_000 });
     });
 
     test('BUG-02 course overview text has no raw HTML entities', async ({ page }) => {
-      test.fail(true, 'BUG-02: overview is double-encoded, e.g. "you&#39;ll" shown literally');
       const results = new SearchResultsPage(page);
       await results.gotoCatalogue();
       await results.search(SEARCH.matching.term);
+      await expect(results.cards.first()).toBeVisible(); // precondition: there are overviews to check
+
+      test.fail(true, 'BUG-02: overview is double-encoded, e.g. "you&#39;ll" shown literally');
       const overviews = await results.cards.locator('.course-overview').allInnerTexts();
       for (const text of overviews) {
         expect(text).not.toMatch(/&(#\d+|amp|quot|lt|gt);/);

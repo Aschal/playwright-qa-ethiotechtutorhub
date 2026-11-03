@@ -19,6 +19,11 @@ concurrency:
 env:
   BASE_URL: ${{ inputs.base_url || 'https://ethiotechtutorhub.com' }}
 
+# Live tests run on `vars.RUNNER` (repo Settings → Secrets and variables →
+# Actions → Variables). Leave it unset for GitHub-hosted Ubuntu, or set it to
+# `self-hosted` to run on your own machine, e.g. when the target's firewall
+# blocks cloud data-center IPs.
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
@@ -29,9 +34,29 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
 
+  # Gate: can this runner reach the target at all? Without it, an unreachable
+  # host shows up as every test timing out for minutes, which hides the cause.
+  reachability:
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - id: check
+        shell: bash
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE_URL/" || true)
+          echo "HTTP status from $BASE_URL: ${code:-none}"
+          if [[ "$code" =~ ^[23] ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Target not reachable from this runner::$BASE_URL did not respond (status: ${code:-connection timeout}). The host's firewall likely drops cloud data-center traffic. Live tests were skipped; run them locally or set the RUNNER repo variable to a self-hosted runner."
+          fi
+
   api:
-    needs: typecheck
-    runs-on: ubuntu-latest
+    needs: [typecheck, reachability]
+    if: needs.reachability.outputs.ok == 'true'
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,7 +69,7 @@ jobs:
 
   e2e:
     needs: api # fail fast: no point driving a browser if the endpoint is broken
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -74,7 +99,7 @@ jobs:
   load:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     needs: api
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v4
       - uses: grafana/setup-k6-action@v1

@@ -74,12 +74,15 @@ test.describe('POST /search_course.php @api', () => {
 
   test.describe('known defects', () => {
     test('BUG-03 result thumbnails are web-optimised (< 300 KB)', async ({ request }) => {
-      test.fail(true, 'BUG-03: thumbnails are 0.9-1.6 MB; courses.php takes ~40s to fully load');
       const MAX_KB = 300;
-      const { resultsBlock } = await search(request, SEARCH.matching.term);
+      const { res, resultsBlock } = await search(request, SEARCH.matching.term);
       const thumbs = [...resultsBlock.matchAll(/<img src="([^"]+)" class="thumb"/g)].map((m) => m[1]);
+      // Preconditions run before test.fail(), so a timeout or a changed page
+      // is a real failure, not a false "expected failure".
+      expect(res.status()).toBe(200);
       expect(thumbs.length).toBeGreaterThan(0);
 
+      test.fail(true, 'BUG-03: thumbnails are 0.9-1.6 MB; courses.php takes ~40s to fully load');
       const oversized: string[] = [];
       for (const src of thumbs) {
         const head = await request.head(`/${src}`);

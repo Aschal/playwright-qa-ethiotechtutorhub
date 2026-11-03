@@ -47,6 +47,25 @@ docs/TEST_PLAN.md   Test plan, results, defect reports, go/no-go
 - **Flake control.** Retries run in CI only and are reported as *flaky*, not hidden. Traces, screenshots and video are kept on failure. Workers are capped to avoid load on production.
 - **Production-safe.** Read-only checks only: no sign-ups and no form submissions that write data.
 
+## CI and the production firewall
+
+The site's host drops connections from cloud data-center IPs, so GitHub-hosted runners
+can't reach it: every request ends in `Connection timeout`. CI therefore starts with a
+**reachability** job:
+
+- **Reachable:** the API, e2e and a11y jobs run as normal.
+- **Not reachable:** the live jobs are skipped and the run shows a warning that explains why. Typecheck still runs on every PR.
+
+To run the full suite in CI anyway, register a
+[self-hosted runner](https://docs.github.com/actions/hosting-your-own-runners) on a machine
+that can reach the site. Then set the repo variable `RUNNER=self-hosted`
+(Settings → Secrets and variables → Actions → Variables). With a staging environment you
+can instead pass its URL to the manual workflow run.
+
+Known-defect tests call `test.fail()` only **after** their preconditions pass, for example
+an HTTP 200 and results on the page. That way a network outage is reported as a real
+failure, not mistaken for the known bug.
+
 ## Use of AI
 
 AI (Claude) was used to explore the site, draft test cases and scaffold the
