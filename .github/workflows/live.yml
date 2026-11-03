@@ -1,0 +1,97 @@
+name: Live - tests against a deployed site
+
+# Manual only. There is no schedule: nothing runs against production unless
+# someone starts it. On GitHub-hosted runners this currently FAILS at the
+# reachability step, because the host drops their connections. That red is
+# correct: it means "could not test", and is never reported as success.
+# To get a real run, use a runner that can reach the site (repo variable
+# RUNNER) or point base_url at a staging copy.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Site to test'
+        default: 'https://ethiotechtutorhub.com'
+      projects:
+        description: 'Playwright projects, space-separated (security also needs ETTH_INJECTION_TESTS, never on production)'
+        default: 'api chromium mobile-chrome site a11y'
+      run_load_test:
+        description: 'Also run the k6 load test (unverified script, see README)'
+        type: boolean
+        default: false
+      confirm_production_load:
+        description: 'Required to load production: type "load production"'
+        default: ''
+
+concurrency:
+  group: live-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  BASE_URL: ${{ inputs.base_url }}
+
+jobs:
+  # Fails the run when the site cannot be tested. It never skips quietly.
+  reachability:
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    steps:
+      - shell: bash
+        run: |
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$BASE_URL/" || true)
+          if [[ -z "$code" || "$code" == "000" ]]; then
+            echo "::error title=Could not test::No response from $BASE_URL within 20s. GitHub-hosted runners are blocked by the host's firewall; use a runner that can reach the site or a staging URL."
+            exit 1
+          elif [[ "$code" =~ ^5 ]]; then
+            echo "::error title=Site error::$BASE_URL returned HTTP $code. The site itself is failing."
+            exit 1
+          elif [[ "$code" =~ ^4 ]]; then
+            echo "::error title=Request refused::$BASE_URL returned HTTP $code to this runner, possibly a firewall or WAF block."
+            exit 1
+          fi
+          echo "$BASE_URL answered HTTP $code"
+
+  tests:
+    needs: reachability
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run live tests
+        shell: bash
+        run: npx playwright test $(printf -- '--project=%s ' ${{ inputs.projects }})
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
+      - name: Publish JUnit summary
+        if: ${{ !cancelled() }}
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: test-results/junit.xml
+          check_name: Live Playwright results
+
+  load:
+    needs: reachability
+    if: inputs.run_load_test
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    steps:
+      - name: Refuse to load production without confirmation
+        shell: bash
+        run: |
+          if [[ "$BASE_URL" =~ ^https?://(www\.)?ethiotechtutorhub\.com(/|$) && "${{ inputs.confirm_production_load }}" != "load production" ]]; then
+            echo "::error title=Production load refused::$BASE_URL is production. Type \"load production\" in confirm_production_load to run k6 against it."
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+      - run: k6 run -e BASE_URL="$BASE_URL" perf/search.k6.js
+        shell: bash
