@@ -1,0 +1,23 @@
+{
+  "name": "etth-qa-automation",
+  "version": "1.0.0",
+  "description": "Playwright + TypeScript QA suite for EthioTechTutor Hub course search",
+  "scripts": {
+    "test": "playwright test",
+    "test:api": "playwright test --project=api",
+    "test:e2e": "playwright test --project=chromium --project=mobile-chrome",
+    "test:a11y": "playwright test --project=a11y",
+    "test:smoke": "playwright test --grep @smoke",
+    "typecheck": "tsc",
+    "report": "playwright show-report"
+  },
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.1",
+    "@playwright/test": "^1.48.2",
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
+}

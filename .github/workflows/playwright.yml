@@ -1,0 +1,81 @@
+name: QA - Playwright
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * *' # nightly 06:00 Addis Ababa
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'Environment to test'
+        default: 'https://ethiotechtutorhub.com'
+
+concurrency:
+  group: qa-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  BASE_URL: ${{ inputs.base_url || 'https://ethiotechtutorhub.com' }}
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+
+  api:
+    needs: typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright test --project=api
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: report-api, path: playwright-report, retention-days: 14 }
+
+  e2e:
+    needs: api # fail fast: no point driving a browser if the endpoint is broken
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [chromium, mobile-chrome, a11y]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --project=${{ matrix.project }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: report-${{ matrix.project }}
+          path: |
+            playwright-report
+            test-results
+          retention-days: 14
+      - name: Publish JUnit summary
+        if: always()
+        uses: mikepenz/action-junit-report@v4
+        with:
+          report_paths: test-results/junit.xml
+          check_name: Playwright (${{ matrix.project }})
+
+  load:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    needs: api
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: grafana/setup-k6-action@v1
+      - run: k6 run -e BASE_URL=$BASE_URL perf/search.k6.js
