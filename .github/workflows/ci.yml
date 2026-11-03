@@ -1,0 +1,32 @@
+name: CI - static checks
+
+# Runs on every push and pull request. It verifies only what a GitHub-hosted
+# runner CAN verify: the code compiles, passes lint, and every spec loads.
+# It makes no request to the live site, because GitHub's runners cannot reach
+# it (the host drops their connections; see README). A green tick here means
+# "static checks passed", not "the site works". Live tests: live.yml.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Test discovery (loads every spec and project, no network)
+        run: npx playwright test --list

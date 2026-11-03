@@ -16,9 +16,15 @@ export const SEARCH = {
   noMatch: 'zzqqxx-no-such-course',
   /** Amharic keyword — the catalogue is bilingual. */
   amharic: 'ቴስቲንግ',
-  /** A tutor's name; the placeholder says teachers are searchable. */
+  /** A tutor's name; search matches tutor names since 2026-11-03 (was BUG-01). */
   teacherName: 'Amanuel',
-  /** Hostile inputs that must be treated as plain text. */
+} as const;
+
+/**
+ * Hostile inputs that must be treated as plain text. Only used by
+ * tests/security/, which is skipped unless ETTH_INJECTION_TESTS=1.
+ */
+export const INJECTION = {
   xss: '<script>window.__xss=1</script>',
   sqli: "' OR '1'='1",
 } as const;

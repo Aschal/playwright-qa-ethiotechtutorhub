@@ -4,7 +4,8 @@
 **Feature:** Course search (header search, catalogue search, results page)
 **Author:** Aschalew Tesfaye
 **Date:** 2026-11-03
-**Status:** Executed. 3 open defects (see section 9)
+**Status:** Executed. 1 open defect (BUG-03). BUG-01 and BUG-02 were fixed on 2026-11-03 (see section 9).
+Whole-site checks (availability, navigation, links, responsive layout, page-level accessibility) are in the same suite, summarised in section 5b.
 
 ---
 
@@ -70,7 +71,7 @@ Most edge-case permutations live at the HTTP layer. The UI layer stays small and
 
 ## 5. Test cases
 
-**Legend:** ✅ automated · 🔶 automated as known defect (`test.fail`) · 📝 manual
+**Legend:** ✅ automated · 🔶 automated as known defect (`test.fail`) · 🔒 automated, runs only with `ETTH_INJECTION_TESTS=1` (not against production) · ⚠️ written but never executed · 📝 manual
 
 | ID | Title | Steps | Expected | Pri | Auto |
 |---|---|---|---|---|---|
@@ -78,16 +79,16 @@ Most edge-case permutations live at the HTTP layer. The UI layer stays small and
 | **TC-02** | No-match search shows empty state | Home → search `zzqqxx-no-such-course` | 0 cards; message `no courses found!`; term kept in box | P1 | ✅ UI |
 | **TC-03** | Case-insensitive, whitespace-tolerant | Catalogue → search `testing`, `TESTING`, `   testing   ` | Identical result lists | P2 | ✅ UI |
 | TC-04 | Amharic keyword | Search `ቴስቲንግ` | Returns *API Testing for Beginners* | P2 | ✅ UI |
-| TC-05 | XSS input is inert (UI) | Search `<script>window.__xss=1</script>` | Script not executed; shown as text in box | P1 | ✅ UI |
+| TC-05 | XSS input is inert (UI) | Search `<script>window.__xss=1</script>` | Script not executed; shown as text in box | P1 | 🔒 UI |
 | **API-01** | Contract and SLA | `POST /search_course.php` `search_course=testing` | 200, `text/html; charset=UTF-8`, < 3s, expected titles present | P1 | ✅ API |
 | API-02 | Empty and no-match messages | POST with `""` and nonsense term | Correct message for each, 200 | P1 | ✅ API |
-| API-03 | Reflected input is escaped | POST XSS payload | Raw payload absent; `&lt;script&gt;` present | P1 | ✅ API |
-| API-04 | SQL meta-characters are safe | POST `' OR '1'='1` | 0 results, no DB error text, 200 | P1 | ✅ API |
+| API-03 | Reflected input is escaped | POST XSS payload | Raw payload absent; `&lt;script&gt;` present | P1 | 🔒 API |
+| API-04 | SQL meta-characters are safe | POST `' OR '1'='1` | 0 results, no DB error text, 200 | P1 | 🔒 API |
 | API-05 | GET without body | `GET /search_course.php` | No 5xx, no PHP warnings | P3 | ✅ API |
 | A11Y-01 | Results page WCAG 2.1 AA | axe scan of `section.courses` | No serious or critical violations | P2 | ✅ a11y |
-| PERF-01 | Search latency under load | k6: ramp to 10 VUs for 1 min | p95 < 1500 ms, errors < 1% | P2 | ✅ k6 |
-| BUG-01 | Teacher-name search | Search "Amanuel" | Tutor's courses returned | P2 | 🔶 |
-| BUG-02 | Overview text encoding | Search "testing", read overviews | No literal `&#39;`, `&amp;` | P3 | 🔶 |
+| PERF-01 | Search latency under load | k6: ramp to 10 VUs for 1 min | p95 < 1500 ms, errors < 1% | P2 | ⚠️ k6 (manual only) |
+| REG-01 | Teacher-name search (was BUG-01) | Search "Amanuel" | Tutor's courses returned | P2 | ✅ UI |
+| REG-02 | Overview text encoding (was BUG-02) | Search "testing", read overviews | No literal `&#39;`, `&amp;` | P3 | ✅ UI |
 | BUG-03 | Thumbnail weight | HEAD each result thumbnail | Each < 300 KB | P1 | 🔶 |
 | M-01 | Max length 100 | Paste 150 chars | Input truncates at 100; server handles >100 if the limit is bypassed | P3 | 📝 |
 | M-02 | Keyboard-only search | Tab to header search, type, Enter, Tab to result | Fully operable, visible focus | P2 | 📝 |
@@ -96,6 +97,19 @@ Most edge-case permutations live at the HTTP layer. The UI layer stays small and
 
 The three cases in **bold** (TC-01, TC-02, TC-03) are the 3 UI cases the exercise asks for.
 **API-01** is the single API test. Everything else is extra coverage.
+
+## 5b. Whole-site checks
+
+Read-only checks across the public site, in `tests/site/` and `tests/a11y/site.a11y.spec.ts`.
+Page lists and viewports live in `test-data/site.ts`.
+
+| Area | Checks | Tests |
+|---|---|---|
+| Availability | 9 public pages answer below 400 and render a title and a non-empty body. Login and register render a form (nothing is submitted). An unknown URL doesn't return 5xx. | 12 |
+| Navigation | Every public page is linked from the homepage. Courses and Pricing click-throughs work. The logo returns home. No header or nav link is a placeholder (`#`, empty). | 5 |
+| Link integrity | Every internal homepage link resolves below 400. Social profiles are not 404. | 2 |
+| Responsive | No horizontal overflow on 5 pages at 390, 820 and 1440 px. Navigation is reachable at phone width. | 16 |
+| Accessibility (pages) | axe WCAG 2.1 AA on Home, Courses, Pricing and Contact, failing on *critical* only (*serious* and below are logged). Exactly one `h1`, `lang` present, `alt` on every image. | 7 |
 
 ## 6. Test data
 
@@ -106,32 +120,44 @@ depend on production content.
 
 ## 7. Environments and execution
 
-- **Target:** production (read-only tests only; no account creation or writes)
-- **Browsers:** Desktop Chrome, Pixel 7 (mobile Chrome emulation)
-- **CI:** GitHub Actions on every PR and push to `main`, plus a nightly run. HTML report, traces and JUnit are uploaded as artifacts.
-- **Flake control:** 2 retries in CI only. Any test that passes on retry is marked *flaky* in the report and tracked. Traces and video are kept on failure. Workers are capped at 2 to avoid load on production.
+- **Target:** production.
+  - The tests create no accounts and submit no forms.
+  - Visits to tracked pages do add `page_view` rows to `analytics_events` (see README).
+  - Injection payloads are off by default.
+- **Browsers:** Desktop Chrome, Pixel 7 (mobile Chrome emulation).
+- **Where the live suite runs:** locally. GitHub-hosted runners can't reach the site, because the host drops their connections.
+- **CI:**
+  - `ci.yml` runs on every PR and push. It does type check, lint and test discovery, and makes no requests to the site.
+  - `live.yml` is manual only. It fails if the site is unreachable or returns 4xx/5xx.
+  - There is no schedule.
+- **Flake control:** 1 retry. Any test that passes on retry is marked *flaky* in the report. Traces are recorded on the first retry; video and screenshots are kept on failure. Workers are capped at 2 to avoid load on production.
 
 ## 8. Entry and exit criteria
 
 **Entry:** feature deployed to the target environment; test data present.
-**Exit (go):** all P1 cases pass; no open P1 defect without an agreed workaround; a11y has no serious or critical violations; PERF-01 thresholds met.
+**Exit (go):** all P1 cases pass; no open P1 defect without an agreed workaround; A11Y-01 (search results) has no serious or critical violations, and the page scans have no critical violations; PERF-01 thresholds met once the k6 script has been verified on staging.
 **No-go:** any P1 functional or security failure.
 
-## 9. Results and defects (run of 2026-11-03)
+## 9. Results and defects (local runs of 2026-11-03, merged suite)
 
-21/21 automated checks behave as expected: 16 pass, and the 3 known defects fail as
-expected (BUG-01 and BUG-02 run on both desktop and mobile, BUG-03 runs once at the
-HTTP layer, so 5 expected-fail runs in total).
+Two consecutive full runs against production gave the same result:
+- **59 passed, 3 skipped, 0 failed, 0 flaky** (62 tests).
+- The 3 skipped are the injection tests (flag not set).
+- The 59 passed include BUG-03, which fails as expected and for the right reason: its assertion names the oversized files.
 
-| ID | Severity | Summary | Repro | Expected vs actual |
-|---|---|---|---|---|
-| **BUG-03** | **High** (perf) | Course thumbnails are unoptimised (0.9–1.6 MB each); `courses.php` takes ~41s to fire `load`, home ~18s | Open `courses.php` with DevTools Network | < 300 KB per thumbnail (WebP, resized to display size) vs 1.6 MB PNGs. On mobile data this is the biggest UX risk on the site. |
-| **BUG-01** | Medium | Placeholder promises teacher search, but tutor names return nothing | Search "Amanuel" (tutor of 3 courses) | Tutor's courses vs `no courses found!`. Fix: also search the tutor name, or change the placeholder. |
-| **BUG-02** | Low | Overview text is HTML-encoded twice | Search "testing" and read the *API Testing for Beginners* overview | `you'll` vs literal `you&#39;ll` (source has `&amp;#39;`). Likely `htmlspecialchars` applied on save **and** on output. |
+| ID | Severity | Status | Summary |
+|---|---|---|---|
+| **BUG-03** | **High** (perf) | **Open, improved** | Thumbnails were 0.9–1.6 MB each, and `courses.php` took ~41 s to fire `load`. On 2026-11-03 the 3 "testing" thumbnails are 170, **383** and **912** KB, so 2 are still over the 300 KB target. |
+| BUG-01 | Medium | **Fixed 2026-11-03** (now REG-01) | The placeholder promised teacher search, but tutor names returned nothing. Search now also matches the tutor name. |
+| BUG-02 | Low | **Fixed 2026-11-03** (now REG-02) | Overview text was HTML-encoded twice (a literal `you&#39;ll`). |
 
-**Positive security findings:** search input is HTML-escaped on output (no reflected XSS),
-and SQL meta-characters are handled safely (prepared statements likely).
+**Accessibility backlog** (logged, not failing):
+- `color-contrast`: Home 9 elements, Pricing 3
+- `label-content-name-mismatch`: 1 element each on Home, Courses, Pricing and Contact
 
-**Recommendation:** **Go**, with BUG-03 prioritised for the next sprint. No P1 functional or
-security failures were found. Performance is a P1 risk for the target audience but it is
-not a regression.
+**Security:**
+- Earlier runs showed the public search escapes reflected input and handles SQL meta-characters safely.
+- The PHP source confirms that `search_course.php` uses a prepared statement and stores no search terms.
+- The injection tests now run only on request.
+
+**Recommendation:** **Go.** No P1 functional or security failures. BUG-03 remains the top performance risk for mobile users and should stay prioritised.
