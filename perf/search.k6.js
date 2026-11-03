@@ -2,8 +2,10 @@
 // Run:  k6 run perf/search.k6.js
 //       k6 run -e BASE_URL=https://staging.example.com perf/search.k6.js
 //
-// Kept deliberately small (10 VUs) because the default target is production.
-// Run heavier profiles only against staging.
+// UNVERIFIED: this script has never been executed. Do a 1-VU dry run against
+// staging before trusting its thresholds.
+// Kept deliberately small (10 VUs). Never schedule it against production;
+// live.yml requires a typed confirmation for that.
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
@@ -28,7 +30,12 @@ export default function () {
   const res = http.post(
     `${BASE_URL}/search_course.php`,
     { search_course: term, search_course_btn: '' },
-    { tags: { name: 'search' } },
+    {
+      tags: { name: 'search' },
+      // Same tagging as the Playwright suite. The site's analytics tracker
+      // records no headers, but search_course.php is not tracked anyway.
+      headers: { 'User-Agent': 'ETTH-QA/1.0 (k6)', 'X-Test-Suite': 'etth-qa' },
+    },
   );
   check(res, {
     'status is 200': (r) => r.status === 200,

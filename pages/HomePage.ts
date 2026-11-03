@@ -4,12 +4,9 @@ import { SearchResultsPage } from './SearchResultsPage';
 /** Landing page, including the global header search. */
 export class HomePage {
   readonly headerSearchInput: Locator;
-  readonly headerSearchSubmit: Locator;
 
   constructor(readonly page: Page) {
-    const form = page.locator('header form.search-form');
-    this.headerSearchInput = form.locator('input[name="search_course"]');
-    this.headerSearchSubmit = form.locator('button[name="search_course_btn"]');
+    this.headerSearchInput = page.locator('header form.search-form input[name="search_course"]');
   }
 
   async goto() {

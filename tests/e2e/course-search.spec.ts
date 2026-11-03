@@ -78,43 +78,27 @@ test.describe('Course search @e2e', () => {
     await expect(results.card(/API Testing/)).toBeVisible();
   });
 
-  test('TC-05 hostile input is rendered as text, never executed', async ({ page }) => {
-    const results = new SearchResultsPage(page);
-    await results.gotoCatalogue();
-    await results.search(SEARCH.xss);
-
-    expect(await page.evaluate(() => (window as any).__xss)).toBeUndefined();
-    await expect(results.input).toHaveValue(SEARCH.xss);
-    await expect(results.emptyMessage).toHaveText(MESSAGES.noResults);
-  });
+  // TC-05 (XSS through the search box) lives in tests/security/ and only
+  // runs when ETTH_INJECTION_TESTS=1.
 
   /**
-   * Known defects — these document current behaviour. They are marked
-   * `test.fail()` so the suite stays green while the bug is open, and will
-   * turn RED (unexpected pass) the day it is fixed, prompting removal of
-   * the annotation.
-   *
-   * `test.fail()` is called only AFTER the preconditions pass, so a network
-   * error or a broken page is reported as a real failure instead of being
-   * mistaken for the known bug.
+   * Regression tests for defects fixed on 2026-11-03. They were known-defect
+   * tests (BUG-01, BUG-02) marked `test.fail()`; now they guard the fixes.
    */
-  test.describe('known defects', () => {
-    test('BUG-01 searching a teacher name returns their courses', async ({ page }) => {
+  test.describe('regressions', () => {
+    test('REG-01 searching a teacher name returns their courses (was BUG-01)', async ({ page }) => {
       const results = new SearchResultsPage(page);
       await results.gotoCatalogue();
-      await results.search(SEARCH.teacherName); // precondition: results page loaded
-
-      test.fail(true, 'BUG-01: placeholder says "teachers" are searchable, but tutor names return nothing');
-      await expect(results.cards.first()).toBeVisible({ timeout: 5_000 });
+      await results.search(SEARCH.teacherName);
+      await expect(results.cards.first()).toBeVisible();
     });
 
-    test('BUG-02 course overview text has no raw HTML entities', async ({ page }) => {
+    test('REG-02 course overview text has no raw HTML entities (was BUG-02)', async ({ page }) => {
       const results = new SearchResultsPage(page);
       await results.gotoCatalogue();
       await results.search(SEARCH.matching.term);
-      await expect(results.cards.first()).toBeVisible(); // precondition: there are overviews to check
+      await expect(results.cards.first()).toBeVisible(); // there are overviews to check
 
-      test.fail(true, 'BUG-02: overview is double-encoded, e.g. "you&#39;ll" shown literally');
       const overviews = await results.cards.locator('.course-overview').allInnerTexts();
       for (const text of overviews) {
         expect(text).not.toMatch(/&(#\d+|amp|quot|lt|gt);/);
