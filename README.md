@@ -191,6 +191,13 @@ perf/                  k6 script (manual, unverified)
   link instead of a full page render.
 - **Social links fail only on 404.** Social platforms often answer automated
   requests with 403 or 429. That doesn't mean the profile is missing.
+- **`minimatch` is overridden to 11.x in `package.json`.**
+  - ESLint 10.14 and typescript-eslint 8.72 still depend on minimatch 10.x,
+    which has a denial-of-service advisory
+    ([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)).
+  - The override forces the fixed version. Lint output was checked to be
+    identical with and without it.
+  - Remove the override once both tools depend on minimatch 11 themselves.
 
 ## Not covered
 
