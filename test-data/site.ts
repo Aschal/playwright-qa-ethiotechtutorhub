@@ -2,8 +2,7 @@
  * The public map of the site under test.
  *
  * Everything here is a page a visitor can reach without signing in. Pages
- * that require an account are deliberately absent: see README, "What this
- * suite does not do".
+ * that require an account are deliberately absent: see README, "Not covered".
  */
 
 export interface PublicPage {

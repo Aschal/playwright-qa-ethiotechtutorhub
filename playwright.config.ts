@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test';
  *
  * 1. Nothing here writes data on purpose: no account, no form submission,
  *    no comment. Page views are still recorded by the site's own tracker
- *    (see README, "What the suite still writes").
+ *    (see README, "What the suite writes to production").
  * 2. Requests that send injection payloads only run when
  *    ETTH_INJECTION_TESTS=1 is set, and that should never be against
  *    production. See tests/security/.

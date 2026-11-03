@@ -39,7 +39,7 @@ test.describe('Public pages are available @smoke', () => {
 
 test.describe('Account pages render', () => {
   // These pages are checked for rendering only. Nothing is ever submitted
-  // to them -- see README, "What this suite does not do".
+  // to them -- see README, "Not covered".
   for (const page_ of ACCOUNT_PAGES) {
     test(`${page_.name} page renders a form`, async ({ page }) => {
       const response = await page.goto(page_.path, {
